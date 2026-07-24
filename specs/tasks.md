@@ -10,37 +10,38 @@ Legend: `[R#]` = requirement satisfied. `⛔ CHECKPOINT` = stop and verify. **`�
 
 ## Milestone 0 — Scaffolding (Saltpilot-on-Hermes)
 
-- [ ] 0.1 Install Hermes; confirm `hermes` runs and its model endpoint points at local Ollama (`Foundation-Sec-8B`). The head start builds *on* the proven harness, not a standalone CLI (Main Proposal §2).
-- [ ] 0.2 Create the Saltpilot extension skeleton: `saltpilot/` package, `pyproject.toml` (Python 3.11+), `engagement.toml` example, `tests/` + `fixtures/` dirs, and the **skill** + **MCP-server** scaffolds Hermes will load. Pin deps: stdlib `sqlite3`, an HTTP client for the reasoner API, a TOML reader, an MCP server lib.
-- [ ] 0.3 Implement config loading from `engagement.toml` into a typed `Engagement` object. `[R1, R7]`
-- [ ] 0.4 Implement `GraphStore.init_schema()` — create the SQLite schema from `design.md`, WAL mode on, behind the **graph-MCP** server. `[R5]`
-- [ ] 0.5 Register the skill + the MCP servers with Hermes; drive them from the `hermes` CLI (interim frontend — no custom TUI yet).
+- [ ] 0.1 Install Hermes; confirm `hermes` runs and its model endpoint points at local Ollama (`Foundation-Sec-8B`). The head start builds *on* the proven harness, not a standalone CLI (Main Proposal §2). — **⚠ BLOCKED in this environment** (needs the reference box: Hermes + Ollama + GPU); every other M0 component is built Hermes-ready, so this is a wiring step, not new code.
+- [x] 0.2 Create the Saltpilot extension skeleton: `saltpilot/` package, `pyproject.toml` (Python 3.11+), `engagement.toml` example, `tests/` + `fixtures/` dirs, and the **skill** + **MCP-server** scaffolds Hermes will load. Pin deps: stdlib `sqlite3`, an HTTP client for the reasoner API, a TOML reader, an MCP server lib. *(audit: skeleton + `skill/` + three real MCP servers built; `mcp` + `defusedxml` pinned; `tomllib` is stdlib; the reasoner HTTP client dep lands in M4 where it is first used.)*
+- [x] 0.3 Implement config loading from `engagement.toml` into a typed `Engagement` object. `[R1, R7]` *(audit: `saltpilot/config.py`, 9 tests.)*
+- [x] 0.4 Implement `GraphStore.init_schema()` — create the SQLite schema from `design.md`, WAL mode on, behind the **graph-MCP** server. `[R5]` *(audit: `saltpilot/store.py` + `saltpilot/mcp/graph_server.py`; schema/WAL/idempotency tests.)*
+- [ ] 0.5 Register the skill + the MCP servers with Hermes; drive them from the `hermes` CLI (interim frontend — no custom TUI yet). — **⚠ BLOCKED in this environment** (needs a running Hermes); the servers are launchable stdio entrypoints (`saltpilot-{scope,graph,recon}-mcp`), so registration is a config step on the reference box.
 
 ⛔ **CHECKPOINT 0:** from the `hermes` CLI the Saltpilot skill runs and creates the DB with the schema and an `engagement` row (`sqlite3` shows WAL mode); Hermes lists the registered Saltpilot MCP servers. Nothing else runs yet — but it runs *as a Hermes extension*.
+   *(audit: PARTIAL — the DB/schema/WAL/engagement-row path is proven in-tests, and the three MCP servers construct + launch over stdio; the `hermes`-CLI-drives-it and Hermes-lists-servers halves are blocked on a running Hermes → reference box.)*
 
 ---
 
 ## Milestone 1 — Scope gate (fail-closed first)
 
-- [ ] 1.1 Implement `ScopeGate.check()` for domains, IPs, CIDRs, **and `resolve_and_gate()`** — resolve a hostname to IPs, gate each, return only in-scope IPs (tools receive IPs, never hostnames). `[R1.1, R1.2]` **⟵ slice-blocking fix: scope-resolution hole**
-- [ ] 1.2 Make every error/ambiguity path return `OUT_OF_SCOPE` (fail closed); `check` never raises. `[R1.3]`
-- [ ] 1.3 Unit tests: in-scope host, out-of-scope host, in-CIDR, explicit out-of-scope override, malformed input, resolver error → fail-closed on the last two; **plus a hostname that resolves to an out-of-scope IP → rejected**.
+- [x] 1.1 Implement `ScopeGate.check()` for domains, IPs, CIDRs, **and `resolve_and_gate()`** — resolve a hostname to IPs, gate each, return only in-scope IPs (tools receive IPs, never hostnames). `[R1.1, R1.2]` **⟵ slice-blocking fix: scope-resolution hole** *(audit: `saltpilot/scope.py`, slice-blocking fix landed.)*
+- [x] 1.2 Make every error/ambiguity path return `OUT_OF_SCOPE` (fail closed); `check` never raises. `[R1.3]`
+- [x] 1.3 Unit tests: in-scope host, out-of-scope host, in-CIDR, explicit out-of-scope override, malformed input, resolver error → fail-closed on the last two; **plus a hostname that resolves to an out-of-scope IP → rejected**. *(audit: `tests/test_scope.py`, incl. the rejection case.)*
 
-⛔ **CHECKPOINT 1:** the out-of-scope and ambiguous tests pass. Scope is the one control that must be right before any tool can run.
+⛔ **CHECKPOINT 1:** the out-of-scope and ambiguous tests pass. Scope is the one control that must be right before any tool can run.  *(audit: MET — full scope suite green.)*
 
 ---
 
 ## Milestone 2 — First tool end-to-end (nmap)
 
-- [ ] 2.1 Define the **`Workbench`** and `ToolAdapter` protocols and the `Finding`, `IntentSpec`, `ToolInvocation`, `ToolStatus`, `RawOutput` types from `design.md`. Tools live behind category workbenches; the caller passes an *intent*, never a command. `[R2.6, R3]`
-- [ ] 2.2 Implement the **network workbench** — intent `discover_services(host)` → `NmapAdapter` (`is_available` via `--version`, `render` → `nmap -sV -oX`, `parse` XML → `Finding`s). The workbench calls `resolve_and_gate` and scans **IPs**. `[R2.1, R2.6, R3.1, R3.2]`
-- [ ] 2.3 Unit-test `NmapAdapter.parse()` against a **real captured `nmap -oX` fixture** → assert exact `Finding` list. Add a malformed fixture → assert graceful partial parse. `[R3.4]`
-- [ ] 2.4 Implement a minimal `ReconRunner` that runs one workbench intent: scope-gate targets, subprocess with timeout, reap child, classify outcome, parse. `[R2.4, R2.5]`
-- [ ] 2.5 Implement `canonicalize_host()`, `normalize()`, `dedup()` — identity `(canonical_host, port)`, service as an *attribute*; unify IP↔hostname (a host seen both ways = one asset). `[R3.3]` **⟵ slice-blocking fix: host identity / idempotency**
-- [ ] 2.6 Persist findings via `GraphStore.upsert_asset/upsert_finding`; re-run and assert no duplicates. `[R5.1, R5.3]`
-- [ ] 2.7 Emit a coverage record for the nmap run. `[R8.1]`
+- [x] 2.1 Define the **`Workbench`** and `ToolAdapter` protocols and the `Finding`, `IntentSpec`, `ToolInvocation`, `ToolStatus`, `RawOutput` types from `design.md`. Tools live behind category workbenches; the caller passes an *intent*, never a command. `[R2.6, R3]` *(audit: `saltpilot/workbench.py`, `saltpilot/findings.py`.)*
+- [x] 2.2 Implement the **network workbench** — intent `discover_services(host)` → `NmapAdapter` (`is_available` via `--version`, `render` → `nmap -sV -oX`, `parse` XML → `Finding`s). The workbench calls `resolve_and_gate` and scans **IPs**. `[R2.1, R2.6, R3.1, R3.2]` *(audit: `saltpilot/adapters/nmap.py`.)*
+- [x] 2.3 Unit-test `NmapAdapter.parse()` against a **real captured `nmap -oX` fixture** → assert exact `Finding` list. Add a malformed fixture → assert graceful partial parse. `[R3.4]` *(audit: `tests/test_nmap_parse.py` + `tests/fixtures/nmap_localhost.xml` (real capture) + `nmap_truncated.xml`.)*
+- [x] 2.4 Implement a minimal `ReconRunner` that runs one workbench intent: scope-gate targets, subprocess with timeout, reap child, classify outcome, parse. `[R2.4, R2.5]` *(audit: `saltpilot/recon.py`.)*
+- [x] 2.5 Implement `canonicalize_host()`, `normalize()`, `dedup()` — identity `(canonical_host, port)`, service as an *attribute*; unify IP↔hostname (a host seen both ways = one asset). `[R3.3]` **⟵ slice-blocking fix: host identity / idempotency** *(audit: `saltpilot/normalize.py`, `tests/test_normalize.py`.)*
+- [x] 2.6 Persist findings via `GraphStore.upsert_asset/upsert_finding`; re-run and assert no duplicates. `[R5.1, R5.3]` *(audit: NULL-safe upserts in `saltpilot/store.py`; live + hermetic idempotency tests.)*
+- [x] 2.7 Emit a coverage record for the nmap run. `[R8.1]` *(audit: `CoverageRecord` + `ReconResult.coverage_summary`.)*
 
-⛔ **CHECKPOINT 2:** `saltpilot recon` on an authorized lab host runs nmap, persists correct services as findings, and a second run adds no duplicates. **First evidence the pipeline is real.**
+⛔ **CHECKPOINT 2:** `saltpilot recon` on an authorized lab host runs nmap, persists correct services as findings, and a second run adds no duplicates. **First evidence the pipeline is real.**  *(audit: MET — `tests/test_recon_live.py` runs real nmap vs a localhost service; persists services; idempotent re-run.)*
 
 ---
 

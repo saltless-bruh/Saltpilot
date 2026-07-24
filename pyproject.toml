@@ -13,10 +13,17 @@ requires-python = ">=3.11"
 # in the milestone that first needs them, per tasks.md.
 dependencies = [
     "defusedxml>=0.7",
+    "mcp>=1.2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+
+# MCP server entrypoints Hermes launches over stdio (Task 0.5 registers these with Hermes).
+[project.scripts]
+saltpilot-scope-mcp = "saltpilot.mcp.scope_server:main"
+saltpilot-graph-mcp = "saltpilot.mcp.graph_server:main"
+saltpilot-recon-mcp = "saltpilot.mcp.recon_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
