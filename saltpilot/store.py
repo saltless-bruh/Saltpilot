@@ -11,11 +11,18 @@ v1 implements the schema + engagement upsert here; asset/finding/interpretation 
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from collections.abc import Iterator
+from datetime import datetime, timezone
 
 from .config import Engagement
+from .findings import Asset, Finding
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 SCHEMA = """
 PRAGMA journal_mode = WAL;
@@ -115,8 +122,6 @@ class GraphStore:
 
     def upsert_engagement(self, e: Engagement) -> None:
         """Insert the engagement row if absent; idempotent (re-run keeps one row, R5.3)."""
-        import json
-
         with self.connect() as con:
             con.execute(
                 """
@@ -144,3 +149,98 @@ class GraphStore:
     def journal_mode(self) -> str:
         with self.connect() as con:
             return con.execute("PRAGMA journal_mode").fetchone()[0]
+
+    # --------------------------------------------------------------- asset / finding upserts
+    # NULL-safe matching: SQLite treats NULLs as distinct in a UNIQUE constraint, so idempotency
+    # is enforced here with `col IS ?` (which matches NULL to NULL and value to value) rather than
+    # relying on the table UNIQUE alone. Identity excludes the service label on purpose, so a
+    # reclassifying re-scan updates the asset instead of duplicating it (R3.3, R5.3).
+    @staticmethod
+    def _upsert_asset(con: sqlite3.Connection, a: Asset) -> int:
+        row = con.execute(
+            "SELECT id FROM asset WHERE engagement_id = ? AND canonical_host = ? AND kind = ? "
+            "AND port IS ? AND url_path IS ?",
+            (a.engagement_id, a.canonical_host, a.kind, a.port, a.url_path),
+        ).fetchone()
+        if row is not None:
+            con.execute(
+                "UPDATE asset SET service = COALESCE(?, service), scope_status = ? WHERE id = ?",
+                (a.service, a.scope_status, row["id"]),
+            )
+            return row["id"]
+        cur = con.execute(
+            "INSERT INTO asset (engagement_id, canonical_host, kind, port, url_path, service, scope_status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (a.engagement_id, a.canonical_host, a.kind, a.port, a.url_path, a.service, a.scope_status),
+        )
+        return cur.lastrowid
+
+    @staticmethod
+    def _upsert_finding(con: sqlite3.Connection, f: Finding, asset_id: int | None) -> int:
+        detail_json = json.dumps(f.detail, default=str)
+        row = con.execute(
+            "SELECT id FROM finding WHERE engagement_id = ? AND asset_id IS ? AND kind = ? AND port IS ?",
+            (f.engagement_id, asset_id, f.kind, f.port),
+        ).fetchone()
+        if row is not None:
+            con.execute(
+                "UPDATE finding SET product = ?, version = ?, service = ?, detail = ?, source_tool = ?, "
+                "raw_ref = ?, confidence = ?, observed_at = ? WHERE id = ?",
+                (f.product, f.version, f.service, detail_json, f.source_tool, f.raw_ref,
+                 f.confidence, f.observed_at, row["id"]),
+            )
+            return row["id"]
+        cur = con.execute(
+            "INSERT INTO finding (engagement_id, asset_id, kind, product, version, service, port, "
+            "detail, source_tool, raw_ref, confidence, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (f.engagement_id, asset_id, f.kind, f.product, f.version, f.service, f.port,
+             detail_json, f.source_tool, f.raw_ref, f.confidence, f.observed_at),
+        )
+        return cur.lastrowid
+
+    def upsert_asset(self, a: Asset) -> int:
+        with self.connect() as con:
+            return self._upsert_asset(con, a)
+
+    def upsert_finding(self, f: Finding, asset_id: int | None = None) -> int:
+        with self.connect() as con:
+            return self._upsert_finding(con, f, asset_id)
+
+    def persist_findings(self, engagement: Engagement, findings: Iterator[Finding]) -> dict:
+        """Persist findings as assets + findings in one writer transaction. Idempotent.
+
+        Each finding materializes a `host` asset plus (for services/web endpoints) a finer asset it
+        attaches to. Re-running the same recon updates rows in place — no duplicates (Checkpoint 2).
+        """
+        self.upsert_engagement(engagement)  # ensure the FK target row exists
+        touched_assets: set[int] = set()
+        n_findings = 0
+        with self.connect() as con:
+            for f in findings:
+                host_id = self._upsert_asset(con, Asset(f.engagement_id, f.asset_host, "host"))
+                touched_assets.add(host_id)
+                if f.kind == "service" and f.port is not None:
+                    target_id = self._upsert_asset(
+                        con, Asset(f.engagement_id, f.asset_host, "service", port=f.port, service=f.service)
+                    )
+                elif f.kind == "web_endpoint":
+                    target_id = self._upsert_asset(
+                        con,
+                        Asset(
+                            f.engagement_id, f.asset_host, "web_endpoint",
+                            port=f.port, url_path=f.detail.get("url_path"), service=f.service,
+                        ),
+                    )
+                else:
+                    target_id = host_id
+                touched_assets.add(target_id)
+                self._upsert_finding(con, f, target_id)
+                n_findings += 1
+        return {"assets": len(touched_assets), "findings": n_findings}
+
+    def log_run(self, engagement_id: str, kind: str, detail: dict) -> None:
+        with self.connect() as con:
+            con.execute(
+                "INSERT INTO run_log (engagement_id, kind, detail, created_at) VALUES (?, ?, ?, ?)",
+                (engagement_id, kind, json.dumps(detail, default=str), _utcnow_iso()),
+            )

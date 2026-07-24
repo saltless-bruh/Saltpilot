@@ -7,10 +7,13 @@ name = "saltpilot"
 version = "0.1.0"
 description = "Saltpilot v1 thin slice — the Saltpilot-on-Hermes core loop (scope -> recon -> normalize -> interpret -> graph -> grounded answer)."
 requires-python = ">=3.11"
-# Runtime is stdlib-only at this phase: sqlite3, tomllib, ipaddress, socket, subprocess.
-# Milestone deps (an MCP server lib, an HTTP client for the reasoner API) are added
+# Stdlib does most of the work: sqlite3, tomllib, ipaddress, socket, subprocess.
+# defusedxml hardens nmap-XML parsing against hostile tool output (Auto-Recon Section 5.6).
+# Further milestone deps (an MCP server lib, an HTTP client for the reasoner API) are added
 # in the milestone that first needs them, per tasks.md.
-dependencies = []
+dependencies = [
+    "defusedxml>=0.7",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
