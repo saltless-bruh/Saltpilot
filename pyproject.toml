@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saltpilot"
+version = "0.1.0"
+description = "Saltpilot v1 thin slice — the Saltpilot-on-Hermes core loop (scope -> recon -> normalize -> interpret -> graph -> grounded answer)."
+requires-python = ">=3.11"
+# Runtime is stdlib-only at this phase: sqlite3, tomllib, ipaddress, socket, subprocess.
+# Milestone deps (an MCP server lib, an HTTP client for the reasoner API) are added
+# in the milestone that first needs them, per tasks.md.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["saltpilot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
