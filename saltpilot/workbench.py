@@ -55,6 +55,7 @@ class ToolInvocation:
     engagement_id: str        # execution context threaded to stamp findings (not a model param)
     gated_ips: tuple[str, ...]
     output_format: str        # 'nmap-xml' | 'httpx-json'
+    stdin: str | None = None  # data piped to the tool's stdin (httpx reads targets there)
 
 
 @dataclass(frozen=True)

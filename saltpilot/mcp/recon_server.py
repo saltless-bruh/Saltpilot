@@ -7,7 +7,7 @@ import os
 from mcp.server.fastmcp import FastMCP
 
 from ..config import Engagement, load_engagement
-from ..recon import build_network_recon
+from ..recon import build_recon
 from ..store import GraphStore
 
 
@@ -16,12 +16,13 @@ def build_recon_server(engagement: Engagement, store: GraphStore) -> FastMCP:
 
     @server.tool()
     def run_recon() -> dict:
-        """Run network recon (nmap) on the engagement target, persist findings, return coverage.
+        """Run recon (nmap discovery -> httpx web probe) on the engagement target.
 
-        Scope is enforced inside the pipeline (each target resolved+gated before any packet), so
-        this tool cannot touch an out-of-scope asset. Returns a coverage summary + finding count.
+        Persists findings and returns a coverage summary + finding count. Scope is enforced inside
+        the pipeline (each target resolved+gated before any packet), so this tool cannot touch an
+        out-of-scope asset.
         """
-        result = build_network_recon(engagement, store).run()
+        result = build_recon(engagement, store).run()
         return {
             "coverage": result.coverage_summary(),
             "findings": len(result.findings),

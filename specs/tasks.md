@@ -47,12 +47,12 @@ Legend: `[R#]` = requirement satisfied. `⛔ CHECKPOINT` = stop and verify. **`�
 
 ## Milestone 3 — Second tool + the fed-from-first pattern (httpx)
 
-- [ ] 3.1 Implement the **web workbench** — intent `probe_web(hosts, ports)` → `HttpxAdapter` (`httpx -json`) → `web_endpoint`/`tech` findings (status, title, tech, tls). **Probe *all* open ports and let httpx decide what is web — do not filter by nmap's service label.** `[R2.2]` **⟵ slice-blocking fix: httpx/nmap coupling**
-- [ ] 3.2 Unit-test `HttpxAdapter.parse()` against a real `httpx -json` fixture.
-- [ ] 3.3 Extend `ReconRunner` to run adapters in sequence and feed httpx from nmap's output; missing-tool → capability gap + skip + continue. `[R2.3]`
-- [ ] 3.4 Persist web findings; extend the coverage summary.
+- [x] 3.1 Implement the **web workbench** — intent `probe_web(hosts, ports)` → `HttpxAdapter` (`httpx -json`) → `web_endpoint`/`tech` findings (status, title, tech, tls). **Probe *all* open ports and let httpx decide what is web — do not filter by nmap's service label.** `[R2.2]` **⟵ slice-blocking fix: httpx/nmap coupling** *(audit: `saltpilot/adapters/httpx.py` (WebWorkbench + HttpxAdapter, ProjectDiscovery httpx); `web_feed` in `recon.py` feeds every open port; tech/title/status/tls captured in the `web_endpoint` finding's detail — separate `tech`-kind findings deferred, not needed for the checkpoint.)*
+- [x] 3.2 Unit-test `HttpxAdapter.parse()` against a real `httpx -json` fixture. *(audit: `tests/test_httpx_parse.py` + `tests/fixtures/httpx_localhost.jsonl` (real capture); + failed/malformed/https-tls cases.)*
+- [x] 3.3 Extend `ReconRunner` to run adapters in sequence and feed httpx from nmap's output; missing-tool → capability gap + skip + continue. `[R2.3]` *(audit: two-stage `ReconRunner.run` in `recon.py`; `test_recon_web.py` covers the feed + the missing-httpx capability-gap path.)*
+- [x] 3.4 Persist web findings; extend the coverage summary. *(audit: `persist_findings` materializes `web_endpoint` assets; coverage carries the httpx records; two-stage test asserts (5 assets, 4 findings) + coverage.)*
 
-⛔ **CHECKPOINT 3:** on a lab web host, nmap finds the web port and httpx enriches it (tech/title/status), all persisted. The tool-feeds-tool pattern works — this is the shape every future adapter reuses.
+⛔ **CHECKPOINT 3:** on a lab web host, nmap finds the web port and httpx enriches it (tech/title/status), all persisted. The tool-feeds-tool pattern works — this is the shape every future adapter reuses.  *(audit: MET — `tests/test_recon_live.py::test_live_network_then_web` runs real nmap -> real PD httpx vs a localhost page, enriches with status 200 + title, persists, idempotent re-run.)*
 
 ---
 
