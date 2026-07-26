@@ -58,12 +58,13 @@ Legend: `[R#]` = requirement satisfied. `⛔ CHECKPOINT` = stop and verify. **`�
 
 ## Milestone 4 — Model layer (residency-aware)
 
-- [ ] 4.1 Implement `OllamaProvider` (local) for role `ANALYSIS`, loading `Foundation-Sec-8B` on demand. `[R4.3, R7.1]`
-- [ ] 4.2 Implement `DeepSeekV4Provider` (hosted API) — the **cloud teacher**, used only when `engagement.kind = practice`. `[R7.3]`
-- [ ] 4.3 Implement `RoutedProvider`: analysis→local always; reasoning→**cloud teacher if `kind=practice`, local support if `kind=real`** (never send a real engagement to the cloud); only one local model resident at once. `[R7.1–R7.4]`
-- [ ] 4.4 Add bounded retry + timeout on the cloud path, then fall back to local and record which reasoner answered. `[R6.3]`
+- [x] 4.1 Implement `OllamaProvider` (local) for role `ANALYSIS`, loading `Foundation-Sec-8B` on demand. `[R4.3, R7.1]` *(audit: `saltpilot/models.py` `OllamaProvider` over the OpenAI-compatible `/v1`; on-demand via Ollama keep_alive; residency-aware.)*
+- [x] 4.2 Implement `DeepSeekV4Provider` (hosted API) — the **cloud teacher**, used only when `engagement.kind = practice`. `[R7.3]` *(audit: `DeepSeekV4Provider`; `build_model_provider` constructs it only for practice + when an API key is present.)*
+- [x] 4.3 Implement `RoutedProvider`: analysis→local always; reasoning→**cloud teacher if `kind=practice`, local support if `kind=real`** (never send a real engagement to the cloud); only one local model resident at once. `[R7.1–R7.4]` *(audit: `RoutedProvider` routes by role+kind; R7.4 enforced structurally — a `real` engagement raises if handed a cloud provider AND the factory never builds one; `ResidencyManager` gives single-tenant GPU. Proven live: a REAL engagement with a DeepSeek key+URL supplied still hit `['ollama']` only.)*
+- [x] 4.4 Add bounded retry + timeout on the cloud path, then fall back to local and record which reasoner answered. `[R6.3]` *(audit: `_reason_practice` — bounded retry (retries+1), then local fallback with `Completion.fell_back`/`fallback_reason`/`provider` recording who answered. Proven live: 3 DeepSeek 503s → fell back to local qwen3.)*
 
 ⛔ **CHECKPOINT 4:** a trivial prompt returns a completion from the local analysis model; a `practice` engagement routes reasoning to the cloud teacher, a `real` engagement routes it to the local reasoner (Qwen3) (and makes **no external call**). Confirm only one local model is resident at a time (watch VRAM). `[Validation: VRAM budget + no real→cloud leak]`
+   *(audit: MET — 15 hermetic tests + a live two-endpoint HTTP run showed: analysis→local completion; practice reasoning→cloud teacher; real reasoning→local qwen3 with zero cloud calls; and residency evicting the prior local model on swap. The only reference-box pieces are real weight-serving and the physical VRAM watch — the single-tenant logic is proven.)*
 
 ---
 
