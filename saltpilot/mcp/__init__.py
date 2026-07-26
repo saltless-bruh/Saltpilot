@@ -12,8 +12,9 @@ Servers and the core they wrap:
 
 Each `build_*_server(...)` returns a FastMCP instance bound to an engagement/store; each module's
 `main()` reads SALTPILOT_ENGAGEMENT / SALTPILOT_DB from the environment and runs the server over
-stdio (how Hermes launches an MCP server). Registration WITH Hermes and the `hermes` CLI listing
-them is Task 0.5, verified on the reference box against a running Hermes install.
+stdio (how Hermes launches an MCP server). These are exposed as console entrypoints
+(`saltpilot-{scope,graph,recon}-mcp`). Registration WITH Hermes (`hermes mcp add`, then
+`hermes mcp list`) is Task 0.5 — done and reproducible via `scripts/setup_hermes.sh`.
 
 `cve_lookup`-MCP arrives with Milestone 5; `scout` is out of v1 scope (Knowledge blueprint Section 9).
 """
