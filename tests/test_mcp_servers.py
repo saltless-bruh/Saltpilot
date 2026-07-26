@@ -49,6 +49,16 @@ def test_recon_server_exposes_tool(make_engagement, tmp_path):
     assert _tool_names(server) == {"run_recon"}
 
 
+def test_recon_server_accepts_httpx_binary(make_engagement, tmp_path):
+    # The httpx binary is configurable so a launcher's sanitized PATH (or a shadowed `httpx` name)
+    # cannot break web probing — the recon server reads SALTPILOT_HTTPX_BIN.
+    eng = make_engagement(tmp_path)
+    store = GraphStore(str(tmp_path / "e.sqlite"))
+    store.init_schema()
+    server = build_recon_server(eng, store, httpx_binary="/opt/pd-bin/httpx")
+    assert _tool_names(server) == {"run_recon"}
+
+
 def test_graph_server_exposes_tools_and_round_trips(make_engagement, tmp_path):
     eng = make_engagement(tmp_path)
     store = GraphStore(str(tmp_path / "e.sqlite"))

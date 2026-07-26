@@ -20,6 +20,10 @@ ENGAGEMENT="$LAB/engagement.toml"
 DB="$LAB/engagement.sqlite"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434/v1}"
 MODEL="${SALTPILOT_MODEL:-foundation-sec-8b}"
+# Hermes spawns stdio MCP servers with a sanitized env/PATH that may not match your shell, and the
+# name `httpx` can be shadowed by the unrelated Python httpx CLI. Point the recon server at the
+# ProjectDiscovery httpx binary explicitly if it is not first on the server's PATH.
+HTTPX_BIN="${SALTPILOT_HTTPX_BIN:-httpx}"
 export HERMES_ACCEPT_HOOKS=1
 
 echo "==> 1. Hermes Agent + Saltpilot into $VENV"
@@ -52,7 +56,7 @@ yes | "$HERMES" mcp --accept-hooks add saltpilot-scope --connect-timeout 30 \
 yes | "$HERMES" mcp --accept-hooks add saltpilot-graph --connect-timeout 30 \
   --command "$graph_bin" --env "SALTPILOT_DB=$DB" 2>/dev/null | grep -E "Connected|Saved" || true
 yes | "$HERMES" mcp --accept-hooks add saltpilot-recon --connect-timeout 30 \
-  --command "$recon_bin" --env "SALTPILOT_ENGAGEMENT=$ENGAGEMENT" "SALTPILOT_DB=$DB" 2>/dev/null | grep -E "Connected|Saved" || true
+  --command "$recon_bin" --env "SALTPILOT_ENGAGEMENT=$ENGAGEMENT" "SALTPILOT_DB=$DB" "SALTPILOT_HTTPX_BIN=$HTTPX_BIN" 2>/dev/null | grep -E "Connected|Saved" || true
 
 echo "==> 4. Install the recon skill"
 skill_dir="${HERMES_HOME:-$HOME/.hermes}/skills/security/saltpilot-recon"
