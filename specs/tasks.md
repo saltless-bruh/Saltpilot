@@ -97,13 +97,14 @@ Legend: `[R#]` = requirement satisfied. `⛔ CHECKPOINT` = stop and verify. **`�
 
 ## Milestone 7 — End-to-end validation & honest failure
 
-- [ ] 7.1 Full run on the lab target: `engage → recon → ask`, from a clean DB. `[R8.3]`
-- [ ] 7.2 Kill a tool mid-run (or point at a down host) → assert the pipeline degrades, records the failure, still persists and answers over partial results. `[R2.5, R8.3]`
-- [ ] 7.3 Run the **Validation Goals** checklist from `requirements.md` and write down the results honestly: parser correctness, interpretation quality, idempotency, grounded-answer/no-invention, VRAM budget, scope-gate block.
-- [ ] 7.4 Write a one-page "what the slice proved / what it didn't / what surprised me" note.
-- [ ] 7.5 Freeze the Checkpoint-5 labeled set and the grounded-answer spot-checks as a small **held-out regression set**; re-run it on every model or prompt change thereafter (Copilot §13.5) — so a later model swap can't silently regress quality. `[Validation: regression]`
+- [x] 7.1 Full run on the lab target: `engage → recon → ask`, from a clean DB. `[R8.3]` *(audit: `tests/test_e2e.py::test_full_loop_engage_recon_interpret_ask` (clean DB → recon+interpret persist → grounded ask). Confirmed live: the M7 capstone ran real nmap+httpx on a localhost service → interpret → `ask` returned a grounded answer citing the real discovered port.)*
+- [x] 7.2 Kill a tool mid-run (or point at a down host) → assert the pipeline degrades, records the failure, still persists and answers over partial results. `[R2.5, R8.3]` *(audit: `test_degrade_on_tool_failure_still_persists_and_answers` (httpx dies → nmap findings persist, failure in coverage, ask answers over partial) + `test_interpretation_failure_does_not_break_the_loop` (analysis model down → findings persist, loop completes).)*
+- [x] 7.3 Run the **Validation Goals** checklist from `requirements.md` and write down the results honestly: parser correctness, interpretation quality, idempotency, grounded-answer/no-invention, VRAM budget, scope-gate block. *(audit: `docs/VALIDATION.md` — (a)/(c)/(d)/(f)/(g) recorded PASS with evidence; (b) interpretation-quality and (e) VRAM recorded REFERENCE-BOX with a ready runner + a decision, not faked.)*
+- [x] 7.4 Write a one-page "what the slice proved / what it didn't / what surprised me" note. *(audit: `docs/SLICE_NOTES.md`.)*
+- [x] 7.5 Freeze the Checkpoint-5 labeled set and the grounded-answer spot-checks as a small **held-out regression set**; re-run it on every model or prompt change thereafter (Copilot §13.5) — so a later model swap can't silently regress quality. `[Validation: regression]` *(audit: `tests/regression/eval_set.json` + `tests/test_regression.py` — grounded-answer spot-checks run in CI (deterministic); the interpretation-quality eval runs against a real model when `SALTPILOT_EVAL_MODEL_URL` is set (reference box).)*
 
 ⛔ **CHECKPOINT 7 (release the slice):** every Validation Goal has a recorded pass, or a recorded *finding* with a decision. Only now is v1 "done."
+   *(audit: MET — the slice is releasable. 123 tests pass (+1 skipped = the model-only interpretation eval). Five Validation Goals PASS (a, c, d, f, g), proven hermetically AND live; two (b interpretation-quality, e VRAM) are recorded findings with a decision and a ready runner, deferred to the reference box because they measure the real model on the real GPU. The v1 core loop scope→recon→normalize→interpret→graph→grounded-answer runs end to end as a Hermes extension. See `docs/VALIDATION.md` + `docs/SLICE_NOTES.md`.)*
 
 ---
 
