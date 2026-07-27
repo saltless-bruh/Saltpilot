@@ -18,11 +18,48 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 
 from .config import Engagement
-from .findings import Asset, Finding
+from .findings import Asset, Fact, Finding
 
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# Generic question/meta words that must not, by themselves, make a question "specific" — so a broad
+# question ("what's the most interesting thing you found?") retrieves everything, while a question
+# naming a real entity ("tell me about 8899" / "example.org") filters to it (or to nothing).
+_STOPWORDS = frozenset(
+    """what which where who how why when whats show tell give list find found does did the a an is are
+    was were about on of for to in and or me my you your it this that these those any anything some
+    interesting notable important thing things most more anywhere here there see look looking with have
+    has had can could would please answer question surface attack target targets host hosts service
+    services finding findings port ports open running exposed vuln vulns vulnerability vulnerabilities
+    cve cves web http https server servers something summarize summary describe overview explain recap
+    brief walk through everything report results result data map""".split()
+)
+
+
+def _q_tokens(text: str) -> set[str]:
+    import re
+    return {t for t in re.split(r"[^a-z0-9]+", (text or "").lower()) if len(t) >= 3}
+
+
+def _fact_tokens(fact: Fact) -> set[str]:
+    toks = _q_tokens(fact.text)
+    toks |= {str(p) for p in fact.ports}
+    for h in fact.hosts:
+        toks |= _q_tokens(h)
+    toks |= {c.lower() for c in fact.cves}
+    return toks
+
+
+def _keyword_filter(facts: list[Fact], question: str | None) -> list[Fact]:
+    if not question:
+        return facts
+    keywords = _q_tokens(question) - _STOPWORDS
+    if not keywords:                 # only generic/meta words -> broad question -> everything
+        return facts
+    return [f for f in facts if _fact_tokens(f) & keywords]
 
 SCHEMA = """
 PRAGMA journal_mode = WAL;
@@ -244,6 +281,55 @@ class GraphStore:
                 "INSERT INTO run_log (engagement_id, kind, detail, created_at) VALUES (?, ?, ?, ?)",
                 (engagement_id, kind, json.dumps(detail, default=str), _utcnow_iso()),
             )
+
+    # --------------------------------------------------------------- retrieval (copilot)
+    def facts_for_query(self, engagement_id: str, question: str | None = None) -> list[Fact]:
+        """Pull the engagement's assets, findings, and interpretations as citable Facts (R6.1).
+
+        v1 is graph-primary *simple* retrieval — no embeddings (RAG is the next slice if this proves
+        too weak). An optional keyword filter narrows to facts matching a specific question; a broad
+        question (only generic words) returns everything, and a specific question that matches
+        nothing returns [] so the copilot can honestly say 'no relevant facts' (R6.4)."""
+        facts: list[Fact] = []
+        with self.connect() as con:
+            for a in con.execute(
+                "SELECT id, canonical_host, kind, port, url_path, service FROM asset "
+                "WHERE engagement_id = ? ORDER BY canonical_host, port",
+                (engagement_id,),
+            ).fetchall():
+                host, port = a["canonical_host"], a["port"]
+                if a["kind"] == "host":
+                    text = f"host {host}"
+                elif a["kind"] == "web_endpoint":
+                    text = f"web endpoint {host}:{port}{a['url_path'] or ''} ({a['service'] or '?'})"
+                else:
+                    text = f"service {a['service'] or '?'} on {host}:{port}"
+                facts.append(Fact(f"asset:{a['id']}", "asset", text,
+                                  hosts=(host,), ports=(port,) if port is not None else ()))
+
+            for f in con.execute(
+                "SELECT f.id AS id, a.canonical_host AS host, f.product, f.version, f.service, "
+                "f.port, f.source_tool FROM finding f JOIN asset a ON f.asset_id = a.id "
+                "WHERE f.engagement_id = ? ORDER BY f.port",
+                (engagement_id,),
+            ).fetchall():
+                desc = " ".join(str(x) for x in (f["product"], f["version"], f["service"]) if x)
+                text = f"{desc or 'service'} on {f['host']}:{f['port']} (via {f['source_tool']})"
+                facts.append(Fact(f"finding:{f['id']}", "finding", text,
+                                  hosts=(f["host"],), ports=(f["port"],) if f["port"] is not None else ()))
+
+            for i in con.execute(
+                "SELECT i.id AS id, a.canonical_host AS host, i.summary, i.cve_refs "
+                "FROM interpretation i JOIN asset a ON i.asset_id = a.id WHERE i.engagement_id = ?",
+                (engagement_id,),
+            ).fetchall():
+                cves = tuple(json.loads(i["cve_refs"] or "[]"))
+                text = f"interpretation of {i['host']}: {i['summary']}"
+                if cves:
+                    text += f" (validated CVEs: {', '.join(cves)})"
+                facts.append(Fact(f"interp:{i['id']}", "interpretation", text, hosts=(i["host"],), cves=cves))
+
+        return _keyword_filter(facts, question)
 
     # --------------------------------------------------------------- interpretations
     @staticmethod

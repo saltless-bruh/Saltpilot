@@ -24,6 +24,7 @@ dev = ["pytest>=8"]
 saltpilot-scope-mcp = "saltpilot.mcp.scope_server:main"
 saltpilot-graph-mcp = "saltpilot.mcp.graph_server:main"
 saltpilot-recon-mcp = "saltpilot.mcp.recon_server:main"
+saltpilot-copilot-mcp = "saltpilot.mcp.copilot_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

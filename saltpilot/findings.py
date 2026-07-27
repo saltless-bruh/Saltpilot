@@ -37,3 +37,19 @@ class Asset:
     url_path: str | None = None
     service: str | None = None  # scanner's guess: an attribute, not identity
     scope_status: str = "in_scope"
+
+
+@dataclass(frozen=True)
+class Fact:
+    """A retrieved unit of ground truth for the copilot to answer over (Copilot Section 7).
+
+    Carries a citation `id`, a human-readable `text` for the prompt, and the named entities it
+    contains — which are exactly what the grounding guard cross-checks an answer against.
+    """
+
+    id: str                    # citation id, e.g. 'asset:12' / 'finding:5' / 'interp:3'
+    kind: str                  # 'asset' | 'finding' | 'interpretation'
+    text: str
+    hosts: tuple[str, ...] = ()
+    ports: tuple[int, ...] = ()
+    cves: tuple[str, ...] = ()

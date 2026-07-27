@@ -46,9 +46,10 @@ s = GraphStore(sys.argv[2]); s.init_schema(); s.upsert_engagement(eng)
 print("engagement:", eng.id)
 PY
 
-echo "==> 3. Register the three Saltpilot MCP servers (remove-then-add = idempotent)"
-scope_bin="$VENV/bin/saltpilot-scope-mcp"; graph_bin="$VENV/bin/saltpilot-graph-mcp"; recon_bin="$VENV/bin/saltpilot-recon-mcp"
-for name in saltpilot-scope saltpilot-graph saltpilot-recon; do
+echo "==> 3. Register the four Saltpilot MCP servers (remove-then-add = idempotent)"
+scope_bin="$VENV/bin/saltpilot-scope-mcp"; graph_bin="$VENV/bin/saltpilot-graph-mcp"
+recon_bin="$VENV/bin/saltpilot-recon-mcp"; copilot_bin="$VENV/bin/saltpilot-copilot-mcp"
+for name in saltpilot-scope saltpilot-graph saltpilot-recon saltpilot-copilot; do
   "$HERMES" mcp remove "$name" >/dev/null 2>&1 || true
 done
 yes | "$HERMES" mcp --accept-hooks add saltpilot-scope --connect-timeout 30 \
@@ -57,6 +58,8 @@ yes | "$HERMES" mcp --accept-hooks add saltpilot-graph --connect-timeout 30 \
   --command "$graph_bin" --env "SALTPILOT_DB=$DB" 2>/dev/null | grep -E "Connected|Saved" || true
 yes | "$HERMES" mcp --accept-hooks add saltpilot-recon --connect-timeout 30 \
   --command "$recon_bin" --env "SALTPILOT_ENGAGEMENT=$ENGAGEMENT" "SALTPILOT_DB=$DB" "SALTPILOT_HTTPX_BIN=$HTTPX_BIN" 2>/dev/null | grep -E "Connected|Saved" || true
+yes | "$HERMES" mcp --accept-hooks add saltpilot-copilot --connect-timeout 30 \
+  --command "$copilot_bin" --env "SALTPILOT_ENGAGEMENT=$ENGAGEMENT" "SALTPILOT_DB=$DB" 2>/dev/null | grep -E "Connected|Saved" || true
 
 echo "==> 4. Install the recon skill"
 skill_dir="${HERMES_HOME:-$HOME/.hermes}/skills/security/saltpilot-recon"

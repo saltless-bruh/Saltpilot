@@ -7,7 +7,12 @@ from __future__ import annotations
 import asyncio
 
 from saltpilot.findings import Finding
-from saltpilot.mcp import build_graph_server, build_recon_server, build_scope_server
+from saltpilot.mcp import (
+    build_copilot_server,
+    build_graph_server,
+    build_recon_server,
+    build_scope_server,
+)
 from saltpilot.mcp.graph_server import query_assets, query_findings
 from saltpilot.store import GraphStore
 
@@ -57,6 +62,15 @@ def test_recon_server_accepts_httpx_binary(make_engagement, tmp_path):
     store.init_schema()
     server = build_recon_server(eng, store, httpx_binary="/opt/pd-bin/httpx")
     assert _tool_names(server) == {"run_recon"}
+
+
+def test_copilot_server_exposes_ask(make_engagement, tmp_path):
+    eng = make_engagement(tmp_path)
+    store = GraphStore(str(tmp_path / "e.sqlite"))
+    store.init_schema()
+    server = build_copilot_server(eng, store, model=None)  # model unused until ask() is called
+    assert server.name == "saltpilot-copilot"
+    assert _tool_names(server) == {"ask"}
 
 
 def test_graph_server_exposes_tools_and_round_trips(make_engagement, tmp_path):

@@ -83,14 +83,15 @@ Legend: `[R#]` = requirement satisfied. `⛔ CHECKPOINT` = stop and verify. **`�
 
 ## Milestone 6 — Copilot query (grounded answer)
 
-- [ ] 6.1 Implement `GraphStore.facts_for_query()` — pull the engagement's assets/findings/interpretations, optional keyword filter. `[R6.1]`
-- [ ] 6.2 Implement the grounding prompt: "answer only from these facts; cite the fact ids; if not covered, say so." `[R6.2, R6.4]`
-- [ ] 6.2b Implement `ground_guard()` — extract hosts/ports/CVEs from the answer; strip/flag any not in the fact set; unit-test a fully-grounded answer (passes) and an inventing one (stripped). `[R6.2]` **⟵ slice-blocking fix: grounding guard**
-- [ ] 6.3 Implement `CopilotQuery.answer()`: retrieve → prompt → reasoner → **`ground_guard`** → `Answer` with grounded fact ids, flagged entities, reasoner used. `[R6.1, R6.2, R6.5]`
-- [ ] 6.4 Log every query (question, facts, reasoner, answer) to `run_log`. `[R8.2]`
-- [ ] 6.5 Wire `saltpilot ask "<question>"` to the query path.
+- [x] 6.1 Implement `GraphStore.facts_for_query()` — pull the engagement's assets/findings/interpretations, optional keyword filter. `[R6.1]` *(audit: `store.py` joins asset/finding/interpretation into citable `Fact`s (id/text/hosts/ports/cves); `_keyword_filter` — broad (generic-only) question → all facts, a specific keyword → matches or [] (honest no-facts). Naive by design; RAG is the next slice.)*
+- [x] 6.2 Implement the grounding prompt: "answer only from these facts; cite the fact ids; if not covered, say so." `[R6.2, R6.4]` *(audit: `query.grounding_prompt` + `SYSTEM_PROMPT` — answer only from numbered facts, cite `[finding:3]`, reply "No relevant facts found." when uncovered.)*
+- [x] 6.2b Implement `ground_guard()` — extract hosts/ports/CVEs from the answer; strip/flag any not in the fact set; unit-test a fully-grounded answer (passes) and an inventing one (stripped). `[R6.2]` **⟵ slice-blocking fix: grounding guard** *(audit: `query.ground_guard` extracts IPs/hostnames/ports/CVEs, cross-checks the fact set, and rewrites any not present to `[unverified: …]` (citation ids ignored so they aren't mistaken for ports); `tests/test_ground_guard.py` covers grounded-passes + invented-ip/host/port/cve stripped.)*
+- [x] 6.3 Implement `CopilotQuery.answer()`: retrieve → prompt → reasoner → **`ground_guard`** → `Answer` with grounded fact ids, flagged entities, reasoner used. `[R6.1, R6.2, R6.5]` *(audit: `query.CopilotQuery.answer` retrieve→prompt→REASONING→guard→`Answer(text, grounded, flagged, reasoner, fell_back, no_facts)`; reasoner reported as `provider/model` incl. cloud→local fallback (R6.3/R6.5); reasoner-unavailable degrades, never crashes.)*
+- [x] 6.4 Log every query (question, facts, reasoner, answer) to `run_log`. `[R8.2]` *(audit: `_log` writes a `query` row with question/facts/reasoner/fell_back/grounded/flagged/answer; `test_query_is_logged`.)*
+- [x] 6.5 Wire `saltpilot ask "<question>"` to the query path. *(audit: `saltpilot/mcp/copilot_server.py` exposes `ask` (the v1 form of `saltpilot ask`, driven from the Hermes CLI); console entrypoint `saltpilot-copilot-mcp`; registered live — `hermes mcp add` connected and discovered `ask`, now one of four Saltpilot servers; `scripts/setup_hermes.sh` registers it.)*
 
 ⛔ **CHECKPOINT 6 (the whole point):** `saltpilot ask "what's the most interesting thing you found?"` returns an answer whose entities are **all traceable to stored facts — the guard lets zero invented hosts/ports/CVEs through**; asking about something not in scope/graph yields an honest "no relevant facts." This is the core-loop proof. `[Validation: grounded answer]`
+   *(audit: MET — proven by 24 hermetic tests AND a live run over real HTTP (stub reasoner): to "what's the most interesting thing you found?" the grounded entities (10.10.10.7 / port 8899 / CVE-2014-0160) passed with citations while the invented ones (10.9.9.9 / 3306 / CVE-2021-99999) were ALL rewritten to `[unverified: …]` — zero invented entities through; a question about a not-in-graph service returned "No relevant facts found." The core loop scope→recon→normalize→interpret→graph→grounded-answer is now closed end to end.)*
 
 ---
 
