@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 
 from .config import Engagement
 from .findings import Finding
+from .interpret import CveValidator, Interpreter
+from .models import ProviderError
 from .normalize import build_alias_map, dedup, normalize
 from .scope import ScopeGate
 from .store import GraphStore
@@ -67,6 +69,7 @@ class ReconResult:
     findings: list[Finding]
     coverage: list[CoverageRecord]
     persisted: dict = field(default_factory=dict)
+    interpretations: int = 0
 
     def coverage_summary(self) -> dict[str, int]:
         summary: dict[str, int] = {}
@@ -85,12 +88,17 @@ class ReconRunner:
         store: GraphStore,
         workbenches: list[Workbench],
         executor=run_invocation,
+        *,
+        model=None,
+        cves: CveValidator | None = None,
     ) -> None:
         self.engagement = engagement
         self.gate = gate
         self.store = store
         self.workbenches = workbenches
         self.executor = executor
+        self.model = model          # optional ModelProvider; when set (with cves), interpret findings
+        self.cves = cves
 
     def _by_category(self, category: str) -> list[Workbench]:
         return [wb for wb in self.workbenches if wb.category == category]
@@ -149,7 +157,30 @@ class ReconRunner:
                 "persisted": persisted,
             },
         )
-        return ReconResult(findings=deduped, coverage=coverage, persisted=persisted)
+
+        # Interpretation (optional) — per host, after normalize/dedup/persist (Task 5.3, R4.1).
+        # Best-effort: a model failure fails THAT host's interpret and is recorded, never breaks
+        # the run; the findings are already persisted and answerable.
+        interpretations = 0
+        if self.model is not None and self.cves is not None and deduped:
+            interpreter = Interpreter()
+            by_host: dict[str, list[Finding]] = {}
+            for f in deduped:
+                by_host.setdefault(f.asset_host, []).append(f)
+            for host, host_findings in by_host.items():
+                try:
+                    interp = interpreter.interpret(host, host_findings, self.model, self.cves)
+                    self.store.upsert_interpretation(interp)
+                    interpretations += 1
+                except ProviderError as exc:
+                    self.store.log_run(self.engagement.id, kind="tool",
+                                       detail={"interpret_failed": host, "error": str(exc)})
+                except Exception as exc:  # noqa: BLE001 - degrade coverage, never crash the run
+                    self.store.log_run(self.engagement.id, kind="tool",
+                                       detail={"interpret_error": host, "error": str(exc)})
+
+        return ReconResult(findings=deduped, coverage=coverage, persisted=persisted,
+                           interpretations=interpretations)
 
 
 def build_network_recon(engagement: Engagement, store: GraphStore, executor=run_invocation) -> ReconRunner:
@@ -172,8 +203,13 @@ def build_recon(
     executor=run_invocation,
     *,
     httpx_binary: str = "httpx",
+    model=None,
+    cves: CveValidator | None = None,
 ) -> ReconRunner:
-    """Wire the full v1 recon: network (nmap) + web (httpx), fed in sequence."""
+    """Wire the full v1 recon: network (nmap) + web (httpx), fed in sequence.
+
+    Pass `model` + `cves` to also interpret findings per host after persistence (Milestone 5).
+    """
     from .adapters.httpx import WebWorkbench
     from .adapters.nmap import NetworkWorkbench
 
@@ -187,4 +223,6 @@ def build_recon(
             WebWorkbench(httpx_binary=httpx_binary),
         ],
         executor=executor,
+        model=model,
+        cves=cves,
     )

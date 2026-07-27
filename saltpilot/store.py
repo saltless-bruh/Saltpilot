@@ -244,3 +244,50 @@ class GraphStore:
                 "INSERT INTO run_log (engagement_id, kind, detail, created_at) VALUES (?, ?, ?, ?)",
                 (engagement_id, kind, json.dumps(detail, default=str), _utcnow_iso()),
             )
+
+    # --------------------------------------------------------------- interpretations
+    @staticmethod
+    def _host_asset_id(con: sqlite3.Connection, engagement_id: str, canonical_host: str) -> int:
+        row = con.execute(
+            "SELECT id FROM asset WHERE engagement_id = ? AND canonical_host = ? AND kind = 'host' "
+            "AND port IS NULL AND url_path IS NULL",
+            (engagement_id, canonical_host),
+        ).fetchone()
+        if row is not None:
+            return row["id"]
+        cur = con.execute(
+            "INSERT INTO asset (engagement_id, canonical_host, kind, port, url_path, service, scope_status) "
+            "VALUES (?, ?, 'host', NULL, NULL, NULL, 'in_scope')",
+            (engagement_id, canonical_host),
+        )
+        return cur.lastrowid
+
+    def upsert_interpretation(self, interp) -> int:
+        """Persist one interpretation per host asset; re-interpreting updates in place (idempotent).
+
+        Only VALID CVEs are stored in `cve_refs` (the model proposes, the validator disposes); the
+        provenance class stays `model_asserted` so the write-back gate treats it as quarantine-ready
+        (Copilot Section 4.4). Every fact records its source finding evidence refs (R4.5)."""
+        with self.connect() as con:
+            asset_id = self._host_asset_id(con, interp.engagement_id, interp.asset_host)
+            cve_refs = json.dumps(list(interp.cve_refs))
+            provenance = json.dumps(list(interp.provenance))
+            row = con.execute(
+                "SELECT id FROM interpretation WHERE engagement_id = ? AND asset_id IS ?",
+                (interp.engagement_id, asset_id),
+            ).fetchone()
+            if row is not None:
+                con.execute(
+                    "UPDATE interpretation SET summary = ?, cve_refs = ?, tech_notes = ?, model = ?, "
+                    "confidence = ?, provenance = ?, source = ? WHERE id = ?",
+                    (interp.summary, cve_refs, interp.tech_notes, interp.model, interp.confidence,
+                     provenance, interp.source, row["id"]),
+                )
+                return row["id"]
+            cur = con.execute(
+                "INSERT INTO interpretation (engagement_id, asset_id, summary, cve_refs, tech_notes, "
+                "model, confidence, provenance, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (interp.engagement_id, asset_id, interp.summary, cve_refs, interp.tech_notes,
+                 interp.model, interp.confidence, provenance, interp.source, _utcnow_iso()),
+            )
+            return cur.lastrowid
