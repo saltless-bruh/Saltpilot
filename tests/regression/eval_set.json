@@ -1,0 +1,44 @@
+{
+  "_note": "Frozen held-out regression set (tasks.md 7.5; Copilot Section 13.5). Re-run on every model or prompt change. The grounded-answer spot-checks are deterministic and run in CI; the interpretation-quality eval is the objective Checkpoint-5 bar and runs only when SALTPILOT_EVAL_MODEL_URL points at a real Foundation-Sec-8B (reference box).",
+
+  "grounded_answer_spotchecks": [
+    {
+      "name": "fully grounded answer passes clean",
+      "facts": [
+        {"id": "finding:1", "kind": "finding", "text": "nginx 1.25 http on 10.10.10.7:8899", "hosts": ["10.10.10.7"], "ports": [8899], "cves": []},
+        {"id": "interp:1", "kind": "interpretation", "text": "interpretation of 10.10.10.7", "hosts": ["10.10.10.7"], "ports": [], "cves": ["CVE-2014-0160"]}
+      ],
+      "answer": "10.10.10.7 runs nginx on port 8899 [finding:1], likely affected by CVE-2014-0160 [interp:1].",
+      "expect_flagged": []
+    },
+    {
+      "name": "invented host, port, and cve are all caught",
+      "facts": [
+        {"id": "finding:1", "kind": "finding", "text": "nginx http on 10.10.10.7:8899", "hosts": ["10.10.10.7"], "ports": [8899], "cves": []}
+      ],
+      "answer": "Also 10.9.9.9 exposes a database on port 3306, vulnerable to CVE-2021-99999.",
+      "expect_flagged": ["10.9.9.9", "3306", "CVE-2021-99999"]
+    },
+    {
+      "name": "invented hostname caught while a real one passes",
+      "facts": [
+        {"id": "asset:1", "kind": "asset", "text": "web endpoint admin.acme.com", "hosts": ["admin.acme.com"], "ports": [], "cves": []}
+      ],
+      "answer": "admin.acme.com is exposed; pivot via internal.evil-corp.net.",
+      "expect_flagged": ["internal.evil-corp.net"]
+    }
+  ],
+
+  "interpretation_eval": {
+    "_note": "Objective Checkpoint-5 bar. N/M/K are STARTING thresholds — confirm/adjust against the real lab host. Fill expected_cves with the host's true applicable CVEs (from the seeded mirror) so the false-CVE count is scored; leave empty to only score service identification.",
+    "thresholds": {"N": 2, "M": 3, "K": 1},
+    "host": "10.10.10.50",
+    "findings": [
+      {"port": 22, "service": "ssh", "product": "OpenSSH", "version": "7.4"},
+      {"port": 80, "service": "http", "product": "Apache httpd", "version": "2.4.49"},
+      {"port": 3306, "service": "mysql", "product": "MySQL", "version": "5.7.33"}
+    ],
+    "expected_services": ["ssh", "http", "mysql"],
+    "expected_cves": []
+  }
+}

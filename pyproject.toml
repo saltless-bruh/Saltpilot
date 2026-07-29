@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saltpilot"
+version = "0.1.0"
+description = "Saltpilot v1 thin slice — the Saltpilot-on-Hermes core loop (scope -> recon -> normalize -> interpret -> graph -> grounded answer)."
+requires-python = ">=3.11"
+# Stdlib does most of the work: sqlite3, tomllib, ipaddress, socket, subprocess.
+# defusedxml hardens nmap-XML parsing against hostile tool output (Auto-Recon Section 5.6).
+# Further milestone deps (an MCP server lib, an HTTP client for the reasoner API) are added
+# in the milestone that first needs them, per tasks.md.
+dependencies = [
+    "defusedxml>=0.7",
+    "mcp>=1.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+# MCP server entrypoints Hermes launches over stdio (Task 0.5 registers these with Hermes).
+[project.scripts]
+saltpilot-scope-mcp = "saltpilot.mcp.scope_server:main"
+saltpilot-graph-mcp = "saltpilot.mcp.graph_server:main"
+saltpilot-recon-mcp = "saltpilot.mcp.recon_server:main"
+saltpilot-copilot-mcp = "saltpilot.mcp.copilot_server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["saltpilot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
