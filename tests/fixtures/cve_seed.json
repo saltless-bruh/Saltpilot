@@ -1,0 +1,7 @@
+{
+  "_note": "Tiny local CVE mirror for validation tests. The real 'nvd_local' source is a full NVD/OSV mirror seeded on the reference box; this seed carries a few canonical CVEs (product-level) plus one synthetic versioned entry to exercise version-mismatch. Product-level facts only (versions null) to avoid asserting version-range claims.",
+  "CVE-2014-0160": {"affected": [{"product": "openssl"}]},
+  "CVE-2014-6271": {"affected": [{"product": "bash"}]},
+  "CVE-2021-44228": {"affected": [{"product": "log4j"}]},
+  "CVE-2099-0001": {"affected": [{"product": "acme-widget", "versions": ["1.0", "1.1"]}]}
+}

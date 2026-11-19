@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Saltpilot runtime artifacts
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+engagement.toml          # the real, per-engagement config (example is committed)
+raw_evidence/            # captured raw tool output referenced by provenance

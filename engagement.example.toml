@@ -1,0 +1,22 @@
+# Saltpilot v1 — example engagement config.
+# Copy to `engagement.toml` (gitignored) and edit for your authorized target.
+# The reasoner is selected by `kind`, never a per-call flag: practice -> cloud TEACHER,
+# real -> local SUPPORT. There is no setting that sends a `real` engagement to the cloud.
+
+[engagement]
+target = "lab.internal"
+in_scope = ["lab.internal", "10.10.10.0/24"]
+out_of_scope = ["10.10.10.1"]
+mode = "white"          # v1: loud white-box only (Red-stealth is a later slice)
+kind = "practice"       # 'practice' (lab/CTF/HTB/THM) -> cloud TEACHER
+                        # 'real'     (authorized IRL)   -> local SUPPORT, nothing leaves the box
+
+[models]
+analysis        = "foundation-sec-8b-reasoning"  # local, on-demand — fdtn-ai/...-Q4_K_M-GGUF (~5 GB)
+reasoner_cloud  = "deepseek-v4-flash"            # the TEACHER, used ONLY when kind = 'practice'
+reasoner_local  = "qwen3-4b-thinking-2507"       # local reasoner/broker — unsloth GGUF, UD-Q4_K_XL (~2.5-3 GB)
+cve_source      = "nvd_local"                    # deterministic CVE validator source
+
+[recon]
+tool_timeout_secs = 300
+nmap_args = "-sV -T4"

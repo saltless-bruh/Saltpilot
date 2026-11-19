@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -sV -oX - 10.10.10.7 10.10.10.8" start="1784865530" version="7.94SVN" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="2" services="22,80"/>
+<host starttime="1784865530" endtime="1784865536"><status state="up" reason="syn-ack"/>
+<address addr="10.10.10.7" addrtype="ipv4"/>
+<ports><port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="8.9p1" method="probed" conf="10"/></port></ports>
+</host>
+<host starttime="1784865531" endtime="1784865537"><status state="up" reason="syn-ack"/>
+<address addr="10.10.10.8" addrtype="ipv4"/>
+<ports><port protocol="tcp" portid="80"><state state="open" reason="syn-ack"/><serv
